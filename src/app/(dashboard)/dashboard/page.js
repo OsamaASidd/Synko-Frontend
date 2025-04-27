@@ -23,6 +23,8 @@ import NoData from "@/components/reporting/no-data";
 import moment from "moment";
 import { REPORT_PAGES } from "@/utils/constants";
 import UserSubscription from "@/components/user-subscription";
+import ChatWidget from "@/components/common/ChatWidget";
+
 
 export default function Dashboard() {
   const { merchant, user, setMerchant, setUserRole } =
@@ -824,6 +826,8 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+
+        <ChatWidget />
       </div>
     </UserSubscription>
   );

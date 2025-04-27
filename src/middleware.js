@@ -22,7 +22,8 @@ const nonProtectedRoutesForAuthenticatedUsers = [
 ];
 
 export function middleware(request) {
-  const token = request.cookies.get(TOKEN);
+  // const token = request.cookies.get(TOKEN);
+  const token = "FAKE_TOKEN";
   const path = request.nextUrl.pathname;
 
   // Redirect authenticated users away from non-protected routes
