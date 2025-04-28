@@ -1,60 +1,186 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FiMessageCircle } from "react-icons/fi";
 import { MdKeyboardArrowDown } from "react-icons/md";
+import axios from "axios";
 
 export default function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState("analytics");
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([]); // array of { role: "user" | "bot", content: string }
+  const [sessionId, setSessionId] = useState(null); // For maintaining conversation context
+  const messagesEndRef = useRef(null); // For auto-scrolling to bottom
+
+  const analyticsPrompts = [
+    "What's the most selling item?",
+    "Who's the best performing employee?",
+    "Show sales by category",
+    "What are the peak sales hours?",
+    "Which menu items have the highest profit margin?",
+  ];
+
+  const taskPrompts = [
+    "Add Chicken Malai Roll for €6 under BBQ, available for take-away and delivery",
+  ];
+
+  useEffect(() => {
+    setSessionId(generateSessionId());
+  }, []);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const generateSessionId = () => {
+    return 'session-' + Math.random().toString(36).substring(2, 15);
+  };
+
+  const prompts = mode === "analytics" ? analyticsPrompts : taskPrompts;
+
+  async function handleSubmit(message) {
+    if (!message.trim()) return;
+
+    setLoading(true);
+
+    // Add user message immediately
+    setMessages((prev) => [...prev, { role: "user", content: message }]);
+    setInput("");
+
+    try {
+      if (mode === "analytics") {
+        const res = await axios.post(
+          "http://localhost:5000/api/query",
+          { query: message },
+          { responseType: "blob" }
+        );
+        const imageUrl = URL.createObjectURL(res.data);
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", content: `<img src="${imageUrl}" alt="Analytics Chart" />` },
+        ]);
+      } else if (mode === "task") {
+        // Send the session ID with the request to maintain conversation context
+        const res = await axios.post("http://localhost:5000/api/agent", {
+          query: message,
+          session_id: sessionId,
+        });
+        
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", content: res.data?.message || "Task executed successfully!" },
+        ]);
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [...prev, { role: "bot", content: "Something went wrong." }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handlePromptClick(prompt) {
+    setInput(prompt);
+    handleSubmit(prompt);
+  }
+
+  function handleKeyPress(e) {
+    if (e.key === "Enter") {
+      handleSubmit(input);
+    }
+  }
+
+  // Clear conversation and reset session ID
+  function handleModeChange(newMode) {
+    setMode(newMode);
+    setMessages([]);
+    setSessionId(generateSessionId());
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {/* Chat Box */}
       {isOpen && (
-        <div className="w-[300px] rounded-2xl overflow-hidden bg-[#E2F6D9] shadow-lg mb-3 mr-3">
-          <div className="bg-[#E2F6D9] text-black p-4">
+        <div className="w-[340px] rounded-2xl overflow-hidden bg-[#E2F6D9] shadow-lg mb-3 mr-3 flex flex-col h-[600px]">
+          <div className="bg-[#E2F6D9] text-black p-4 border-b">
             <h2 className="text-lg font-bold">Hi Afkar!</h2>
             <p className="text-sm">How can we help?</p>
           </div>
 
-          <div className="p-4 space-y-3">
-            {/* Recent message */}
-            <div>
-              <p className="text-xs text-gray-500">Recent message</p>
-              <div className="flex items-start space-x-2 mt-1">
-               
-                <p className="text-sm text-black">Hello Afkar, let us know how...</p>
-              </div>
-            </div>
+          {/* Mode Toggle */}
+          <div className="flex justify-around p-2 border-b">
+            <button
+              onClick={() => handleModeChange("analytics")}
+              className={`text-sm px-3 py-1 rounded-full ${
+                mode === "analytics" ? "bg-[#0E6439] text-white" : "bg-gray-100 text-[#0E6439]"
+              } transition`}
+            >
+              Analytics
+            </button>
+            <button
+              onClick={() => handleModeChange("task")}
+              className={`text-sm px-3 py-1 rounded-full ${
+                mode === "task" ? "bg-[#0E6439] text-white" : "bg-gray-100 text-[#0E6439]"
+              } transition`}
+            >
+              Task Execution
+            </button>
+          </div>
 
-            {/* Chat with us button */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-2 cursor-pointer hover:bg-gray-200 transition">
-              <FiMessageCircle className="text-gray-600" />
-              <p className="text-sm text-black">Chat with us</p>
-            </div>
-
-            {/* Search input */}
-            <div className="flex items-center border text-[#0E6439] rounded-lg p-2">
-              <input
-                type="text"
-                placeholder="Search for help"
-                className="text-sm w-full outline-none bg-transparent text-[#0E6439]"
+          {/* Chat Messages */}
+          <div className="flex-1 p-4 overflow-y-auto space-y-3">
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`p-3 rounded-lg shadow-sm text-sm ${
+                  msg.role === "user"
+                    ? "bg-[#0E6439] text-white self-end ml-12"
+                    : "bg-white text-black mr-12"
+                }`}
+                dangerouslySetInnerHTML={{ __html: msg.content }}
               />
-            </div>
+            ))}
+
+            {loading && (
+              <div className="text-sm text-gray-500 animate-pulse">Loading...</div>
+            )}
+            <div ref={messagesEndRef} /> {/* Empty div for scroll reference */}
           </div>
 
-          {/* Footer navigation */}
-          <div className="flex justify-around p-2 text-[#0E6439] text-xs border-t">
-            <div className="flex flex-col items-center">
-              <span>Home</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span>Messages</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span>Help</span>
-            </div>
+          {/* Input Box */}
+          <div className="flex items-center border-t p-2 bg-white">
+            <input
+              type="text"
+              placeholder="Type your message..."
+              className="text-sm w-full outline-none text-black p-2"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              disabled={loading}
+            />
           </div>
+
+          {/* Prompts */}
+          {messages.length === 0 && (
+          <div className="p-4 space-y-2 border-t bg-[#E2F6D9] max-h-[120px] overflow-y-auto">
+            {prompts.map((prompt, idx) => (
+              <div
+                key={idx}
+                onClick={() => handlePromptClick(prompt)}
+                className="bg-white p-2 rounded-lg cursor-pointer hover:bg-gray-100 text-sm text-black shadow-sm"
+              >
+                {prompt}
+              </div>
+            ))}
+          </div>
+          )}
         </div>
       )}
 
